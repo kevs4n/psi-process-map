@@ -148,6 +148,13 @@ export default function EditModal({ item, itemType, lanes, onSave, onDelete, onC
                 </a>
               )}
             </div>
+            <label style={labelStyle}>Description</label>
+            <textarea
+              style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }}
+              value={formData.description || ''}
+              onChange={(e) => handleChange('description', e.target.value)}
+              placeholder="Optional — used in HTML RFP exports"
+            />
           </>
         )}
 

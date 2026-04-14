@@ -2,6 +2,9 @@
 """Generate 5 template process JSON files using ProcessBuilder."""
 
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
 from schema import ProcessBuilder
 
 

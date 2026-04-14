@@ -43,6 +43,8 @@ export function validateProcess(data) {
         errors.push(`Step ${i} has invalid type: ${step.type}`);
       if (typeof step.x !== 'number') errors.push(`Step ${i} missing x position`);
       if (typeof step.y !== 'number') errors.push(`Step ${i} missing y position`);
+      if (step.description !== undefined && typeof step.description !== 'string')
+        errors.push(`Step ${i} description must be a string`);
       if (stepIds.has(step.id)) errors.push(`Duplicate step id: ${step.id}`);
       stepIds.add(step.id);
     });

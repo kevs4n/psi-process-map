@@ -10,6 +10,23 @@ import { exportSVG, exportPNG, exportJSON, copyJSON, importJSON } from './lib/ex
 import { listDiagrams, loadDiagram, saveDiagram, createDiagram } from './lib/storage';
 import './App.css';
 
+function useFileDrop(onDrop) {
+  useEffect(() => {
+    const prevent = (e) => e.preventDefault();
+    const handleDrop = (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.endsWith('.json')) onDrop(file);
+    };
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', handleDrop);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [onDrop]);
+}
+
 export default function App() {
   const [activeDiagramId, setActiveDiagramId] = useState(null);
   const [process, setProcess] = useState(null);
@@ -76,6 +93,29 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [selectedId, activeDiagramId]);
 
+  const handleFileDrop = useCallback(async (file) => {
+    try {
+      const data = await importJSON(file);
+      const result = validateProcess(data);
+      if (result.valid) {
+        const id = createDiagram();
+        saveDiagram(id, data);
+        setActiveDiagramId(id);
+        setProcess(data);
+        setTool('select');
+        setSelectedId(null);
+        setConnectingFrom(null);
+        setEditingItem(null);
+      } else {
+        alert('Invalid process JSON:\n' + result.errors.join('\n'));
+      }
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+    }
+  }, []);
+
+  useFileDrop(handleFileDrop);
+
   const handleOpenDiagram = (id) => {
     const d = loadDiagram(id);
     if (d) {
@@ -131,6 +171,7 @@ export default function App() {
       x: Math.round(x),
       y: Math.round(y),
       adoRef: '',
+      description: '',
     };
     setProcess((prev) => ({ ...prev, steps: [...prev.steps, newStep] }));
     setSelectedId(newStep.id);

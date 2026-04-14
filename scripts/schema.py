@@ -25,7 +25,7 @@ class ProcessBuilder:
         })
         return self
 
-    def step(self, label, lane, type="process", ado_ref=""):
+    def step(self, label, lane, type="process", ado_ref="", description=""):
         lane_id = self._find_lane(lane)
         if not lane_id:
             raise ValueError(f"Lane '{lane}' not found. Add it first with .lane()")
@@ -40,6 +40,7 @@ class ProcessBuilder:
             "x": 0,
             "y": 0,
             "adoRef": ado_ref,
+            "description": description,
         })
         return self
 

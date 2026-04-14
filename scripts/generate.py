@@ -3,8 +3,11 @@
 
 import argparse
 import json
+import os
 import re
 import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
 from schema import ProcessBuilder
 
 
@@ -55,7 +58,7 @@ def parse_inline(notation):
             builder.lane(lane_name)
             lanes_seen.add(lane_name)
 
-        builder.step(label, lane_name, type=step_type)
+        builder.step(label, lane_name, type=step_type, description="")
         step_labels.append(label)
 
     # Connect sequentially
@@ -119,7 +122,7 @@ def parse_file(filepath):
             builder.lane(lane_name)
             lanes_seen.add(lane_name)
 
-        builder.step(label, lane_name, type=step_type)
+        builder.step(label, lane_name, type=step_type, description="")
 
         # Connect
         if branch_label and prev_decision:
