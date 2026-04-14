@@ -1,0 +1,21 @@
+.canvas-container {
+  cursor: default;
+}
+
+.canvas-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.canvas-container::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+.canvas-container::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+.canvas-container::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
