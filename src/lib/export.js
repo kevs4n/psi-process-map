@@ -1,9 +1,50 @@
-export function exportSVG(svgElement, title) {
+function cleanSvgClone(svgElement) {
   const clone = svgElement.cloneNode(true);
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-  // Remove any selection highlights for clean export
+
+  // Remove selection highlights
   clone.querySelectorAll('[data-selection]').forEach((el) => el.remove());
+
+  // Remove background grid
+  clone.querySelectorAll('[data-background]').forEach((el) => el.remove());
+  const dotGrid = clone.querySelector('#dotGrid');
+  if (dotGrid) dotGrid.remove();
+
+  // Strip Dark Reader attributes and inline styles
+  clone.querySelectorAll('*').forEach((el) => {
+    // Remove data-darkreader-* attributes
+    [...el.attributes].forEach((attr) => {
+      if (attr.name.startsWith('data-darkreader')) el.removeAttribute(attr.name);
+    });
+    // Clean --darkreader-* from inline styles
+    if (el.style && el.style.cssText) {
+      const cleaned = el.style.cssText
+        .split(';')
+        .filter((s) => !s.trim().startsWith('--darkreader'))
+        .join(';');
+      if (cleaned.trim()) {
+        el.setAttribute('style', cleaned);
+      } else {
+        el.removeAttribute('style');
+      }
+    }
+  });
+
+  // Remove cursor: pointer from groups (interactive concern, not for export)
+  clone.querySelectorAll('g[style]').forEach((el) => {
+    const style = el.getAttribute('style') || '';
+    const cleaned = style
+      .split(';')
+      .filter((s) => !s.trim().startsWith('cursor'))
+      .join(';')
+      .trim();
+    if (cleaned) {
+      el.setAttribute('style', cleaned);
+    } else {
+      el.removeAttribute('style');
+    }
+  });
 
   // Ensure SVG <a> elements have both href and xlink:href for max compatibility
   clone.querySelectorAll('a').forEach((a) => {
@@ -14,6 +55,11 @@ export function exportSVG(svgElement, title) {
     }
   });
 
+  return clone;
+}
+
+export function exportSVG(svgElement, title) {
+  const clone = cleanSvgClone(svgElement);
   const serializer = new XMLSerializer();
   const svgStr = serializer.serializeToString(clone);
   const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
@@ -22,10 +68,7 @@ export function exportSVG(svgElement, title) {
 
 export function exportPNG(svgElement, title, scale = 2) {
   return new Promise((resolve, reject) => {
-    const clone = svgElement.cloneNode(true);
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.querySelectorAll('[data-selection]').forEach((el) => el.remove());
-
+    const clone = cleanSvgClone(svgElement);
     const serializer = new XMLSerializer();
     const svgStr = serializer.serializeToString(clone);
     const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
