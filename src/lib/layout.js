@@ -88,7 +88,7 @@ export function autoLayout(process) {
     laneColRow[key] = row + 1;
 
     const x = tokens.layout.startX + col * tokens.layout.horizontalGap;
-    const y = laneYOffset[s.laneId] + tokens.layout.startY + row * tokens.layout.verticalGap;
+    const y = tokens.layout.startY + row * tokens.layout.verticalGap;
 
     return { ...s, x, y };
   });

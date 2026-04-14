@@ -122,7 +122,7 @@ class ProcessBuilder:
             row = lane_col_row.get(key, 0)
             lane_col_row[key] = row + 1
             s["x"] = start_x + col * h_gap
-            s["y"] = lane_y_offset[s["laneId"]] + start_y + row * v_gap
+            s["y"] = start_y + row * v_gap
 
         return self
 

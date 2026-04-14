@@ -6,39 +6,24 @@ import { tokens } from '../lib/tokens';
 const { sizes, colors } = tokens;
 
 function computeLaneBands(lanes, steps) {
-  const laneCounts = {};
-  lanes.forEach((l) => (laneCounts[l.id] = 0));
+  // Find the max relative Y of steps within each lane
+  const laneMaxRelY = {};
+  lanes.forEach((l) => (laneMaxRelY[l.id] = 0));
   steps.forEach((s) => {
-    if (laneCounts[s.laneId] !== undefined) laneCounts[s.laneId]++;
-  });
-
-  // Find max Y per lane to size bands properly
-  const laneMaxY = {};
-  const laneMinY = {};
-  lanes.forEach((l) => {
-    laneMaxY[l.id] = 0;
-    laneMinY[l.id] = Infinity;
-  });
-  steps.forEach((s) => {
-    if (laneMaxY[s.laneId] !== undefined) {
-      laneMaxY[s.laneId] = Math.max(laneMaxY[s.laneId], s.y);
-      laneMinY[s.laneId] = Math.min(laneMinY[s.laneId], s.y);
+    if (laneMaxRelY[s.laneId] !== undefined) {
+      laneMaxRelY[s.laneId] = Math.max(laneMaxRelY[s.laneId], s.y);
     }
   });
 
+  // Stack lanes top-down, sizing each to fit its content
+  const padding = 30;
   const bands = [];
   let currentY = 0;
   lanes.forEach((lane) => {
-    const minY = laneMinY[lane.id] === Infinity ? 0 : laneMinY[lane.id];
-    const maxY = laneMaxY[lane.id];
-    const contentHeight = maxY - minY + sizes.stepHeight + 40;
-    const height = Math.max(tokens.layout.minLaneHeight, contentHeight);
-    bands.push({
-      lane,
-      y: minY > 0 ? minY - 30 : currentY,
-      height,
-    });
-    currentY = (minY > 0 ? minY - 30 : currentY) + height;
+    const contentBottom = laneMaxRelY[lane.id] + sizes.stepHeight + padding;
+    const height = Math.max(tokens.layout.minLaneHeight, contentBottom);
+    bands.push({ lane, y: currentY, height });
+    currentY += height;
   });
 
   return bands;
@@ -60,11 +45,26 @@ export default function Canvas({
   const [dragging, setDragging] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  const stepMap = useMemo(() => {
+  const laneBands = useMemo(
+    () => computeLaneBands(process.lanes, process.steps),
+    [process.lanes, process.steps]
+  );
+
+  // Build lane Y offset map for relative→absolute conversion
+  const laneYOffset = useMemo(() => {
     const map = {};
-    process.steps.forEach((s) => (map[s.id] = s));
+    laneBands.forEach((b) => (map[b.lane.id] = b.y));
     return map;
-  }, [process.steps]);
+  }, [laneBands]);
+
+  // Steps with absolute Y positions for rendering
+  const displaySteps = useMemo(() => {
+    const map = {};
+    process.steps.forEach((s) => {
+      map[s.id] = { ...s, y: s.y + (laneYOffset[s.laneId] || 0) };
+    });
+    return map;
+  }, [process.steps, laneYOffset]);
 
   const getSVGPoint = useCallback(
     (e) => {
@@ -84,56 +84,62 @@ export default function Canvas({
       if (tool === 'add') {
         const pt = getSVGPoint(e);
         // Determine which lane we clicked in
-        const bands = computeLaneBands(process.lanes, process.steps);
         let laneId = process.lanes[0]?.id;
-        for (const band of bands) {
+        for (const band of laneBands) {
           if (pt.y >= band.y && pt.y <= band.y + band.height) {
             laneId = band.lane.id;
             break;
           }
         }
-        onAddStep(pt.x, pt.y, laneId);
+        // Convert click Y to lane-relative Y
+        const relY = pt.y - (laneYOffset[laneId] || 0);
+        onAddStep(pt.x, Math.max(0, relY), laneId);
       } else {
         onSelectItem(null);
       }
     }
   };
 
-  const handleStepMouseDown = (e, step) => {
+  const handleStepMouseDown = (e, stepId) => {
     e.stopPropagation();
     if (tool === 'connect') {
       if (connectingFrom) {
-        if (connectingFrom !== step.id) onCompleteConnect(step.id);
+        if (connectingFrom !== stepId) onCompleteConnect(stepId);
       } else {
-        onStartConnect(step.id);
+        onStartConnect(stepId);
       }
       return;
     }
-    onSelectItem(step.id);
+    onSelectItem(stepId);
     if (tool === 'select') {
       const pt = getSVGPoint(e);
-      setDragging({ id: step.id, offsetX: pt.x - step.x, offsetY: pt.y - step.y });
+      const ds = displaySteps[stepId];
+      setDragging({ id: stepId, offsetX: pt.x - ds.x, offsetY: pt.y - ds.y });
     }
   };
 
-  const handleStepClick = (e, step) => {
+  const handleStepClick = (e, stepId) => {
     e.stopPropagation();
     if (tool === 'connect') {
       if (connectingFrom) {
-        if (connectingFrom !== step.id) onCompleteConnect(step.id);
+        if (connectingFrom !== stepId) onCompleteConnect(stepId);
       } else {
-        onStartConnect(step.id);
+        onStartConnect(stepId);
       }
       return;
     }
-    onSelectItem(step.id);
+    onSelectItem(stepId);
   };
 
   const handleMouseMove = (e) => {
     const pt = getSVGPoint(e);
     setMousePos(pt);
     if (dragging) {
-      onMoveStep(dragging.id, pt.x - dragging.offsetX, pt.y - dragging.offsetY);
+      const step = process.steps.find((s) => s.id === dragging.id);
+      if (!step) return;
+      const absY = pt.y - dragging.offsetY;
+      const relY = absY - (laneYOffset[step.laneId] || 0);
+      onMoveStep(dragging.id, pt.x - dragging.offsetX, relY);
     }
   };
 
@@ -146,12 +152,11 @@ export default function Canvas({
     onSelectItem(conn.id);
   };
 
-  // Compute SVG dimensions
-  const maxX = Math.max(800, ...process.steps.map((s) => s.x + sizes.stepWidth));
-  const maxY = Math.max(600, ...process.steps.map((s) => s.y + sizes.stepHeight + 40));
-
-  const laneBands = computeLaneBands(process.lanes, process.steps);
-  const totalHeight = Math.max(maxY + 80, ...laneBands.map((b) => b.y + b.height + 40));
+  // Compute SVG dimensions from absolute positions
+  const maxX = Math.max(800, ...Object.values(displaySteps).map((s) => s.x + sizes.stepWidth));
+  const totalHeight = laneBands.length > 0
+    ? laneBands[laneBands.length - 1].y + laneBands[laneBands.length - 1].height + 40
+    : 600;
 
   return (
     <svg
@@ -221,36 +226,36 @@ export default function Canvas({
         </g>
       ))}
 
-      {/* Connectors */}
+      {/* Connectors — use absolute positions */}
       {process.connections.map((conn) => (
         <Connector
           key={conn.id}
           connection={conn}
-          fromStep={stepMap[conn.from]}
-          toStep={stepMap[conn.to]}
+          fromStep={displaySteps[conn.from]}
+          toStep={displaySteps[conn.to]}
           isSelected={selectedId === conn.id}
           onClick={(e) => handleConnClick(e, conn)}
           onDoubleClick={() => onDoubleClickItem(conn, 'connection')}
         />
       ))}
 
-      {/* Steps */}
+      {/* Steps — use absolute positions */}
       {process.steps.map((step) => (
         <StepShape
           key={step.id}
-          step={step}
+          step={displaySteps[step.id]}
           isSelected={selectedId === step.id}
-          onMouseDown={(e) => handleStepMouseDown(e, step)}
-          onClick={(e) => handleStepClick(e, step)}
+          onMouseDown={(e) => handleStepMouseDown(e, step.id)}
+          onClick={(e) => handleStepClick(e, step.id)}
           onDoubleClick={() => onDoubleClickItem(step, 'step')}
         />
       ))}
 
       {/* Connecting line preview */}
-      {connectingFrom && stepMap[connectingFrom] && (
+      {connectingFrom && displaySteps[connectingFrom] && (
         <line
-          x1={stepMap[connectingFrom].x}
-          y1={stepMap[connectingFrom].y}
+          x1={displaySteps[connectingFrom].x}
+          y1={displaySteps[connectingFrom].y}
           x2={mousePos.x}
           y2={mousePos.y}
           stroke={colors.selectionStroke}
